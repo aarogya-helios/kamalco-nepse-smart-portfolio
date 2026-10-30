@@ -1,35 +1,42 @@
-# Cloudflare backend setup
+# Cloudflare deployment and integration checklist
 
-This repository now includes a Worker API, a D1 schema, scheduled market refresh and a basic technical-alert engine.
+The repository contains the dashboard, a Worker API, a D1 schema, scheduled market refresh and a first-pass technical-alert engine. These files are implementation work only; they are not live until the Cloudflare resources below are created and configured.
 
-## Required Cloudflare resources
-1. Create a D1 database named kamalco-nepse.
-2. Copy its database ID into wrangler.toml.
-3. Apply migrations: `npx wrangler d1 migrations apply kamalco-nepse --remote`.
-4. Deploy the Worker with Static Assets using Wrangler.
-5. Set secrets: `npx wrangler secret put SHAREHUB_EMAIL` and `npx wrangler secret put SHAREHUB_PASSWORD`.
+## 1. Create and configure D1
+1. In Cloudflare Dashboard, open **Workers & Pages → D1 SQL Database → Create**.
+2. Name the database `kamalco-nepse` and copy its database ID.
+3. Replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.toml`.
+4. Apply the migration from the repository: `npx wrangler d1 migrations apply kamalco-nepse --remote`.
 
-## Market data provider
-The adapter is written for ShareHub's NEPSE Data API. It requires an active API licence/account and server IP allow-listing. The provider documents live stock prices and daily OHLCV history; live data refreshes about every 20 seconds during market hours and every 5 minutes while closed. API credentials must remain Worker secrets and must never be placed in browser JavaScript.
+## 2. Protect the app with Cloudflare Access before adding private data
+The Worker verifies the Cloudflare Access JWT on every `/api/*` request. Create an Access self-hosted application for the exact app hostname and restrict it to your own email/identity. Set these Worker variables in `wrangler.toml`:
+- `ACCESS_TEAM_DOMAIN`: your team domain, e.g. `your-team.cloudflareaccess.com` (without https://)
+- `ACCESS_AUD`: the Access application's AUD tag
+- `APP_ORIGIN`: your exact deployed HTTPS origin
 
-Provider documentation: https://sharehubnepal.com/data/nepse-data-documentation/
+Do not make the API public. If Access is not configured, API requests are intentionally rejected.
 
-## API routes
-- GET /api/health
-- GET /api/holdings
-- PUT /api/holdings
-- GET /api/market
-- GET /api/alerts
-- POST /api/refresh
+## 3. NEPSE market data provider
+The adapter is written against ShareHub Nepal's documented API shape. It has not been verified with a licensed account. Contact ShareHub for a Data API licence covering live stock prices and historical OHLCV. Confirm the API's current authentication, endpoint schema, rate limits and a supported outbound IP allow-list solution for Cloudflare Workers before relying on it.
 
-## Technical alerts
-The first pass calculates RSI(14), SMA(20), SMA(50) and a MACD line from daily closes. Alerts are informational watch/caution flags only; they are not guaranteed sell signals or investment advice. They are deduplicated per symbol/type for 24 hours. Volume confirmation, support/resistance, WACC-based position risk, user notification delivery and authenticated sessions remain to be implemented before public production use.
+Add credentials only as Worker secrets, never to GitHub or browser JavaScript:
+`npx wrangler secret put SHAREHUB_EMAIL`
+`npx wrangler secret put SHAREHUB_PASSWORD`
 
-## Important security note
-The current starter UI is a local-first prototype. Do not expose write API routes publicly until authentication and per-user authorization are enabled. Configure Cloudflare Access or add a proper authenticated session layer before using real personal portfolio data.
+Provider docs: https://sharehubnepal.com/data/nepse-data-documentation/
 
-## Before enabling production access
-- The provider account is not included. Contact ShareHub Nepal for a Data API licence with stock-prices and price-history services. Their documentation says API calls require an allow-listed server IP. Cloudflare Workers do not provide a normal fixed outbound IP on the standard Free/Paid plans; confirm an approved egress/allow-list solution with ShareHub before expecting live sync to work.
-- Do not paste API passwords or tokens into GitHub or ChatGPT. Add them only as Cloudflare Worker secrets.
-- Protect the whole application hostname with Cloudflare Access before putting real portfolio holdings in D1. The prototype API does not yet implement per-user authentication/authorization; do not expose it publicly with personal data.
-- The Cron Trigger is a scheduled polling mechanism, not a guaranteed real-time alert channel. Provider rate limits and market hours apply.
+## 4. Deploy
+Use Wrangler from a trusted local development environment:
+`npx wrangler deploy`
+Then verify `/api/health`, holdings save/load, market refresh and alert history while signed in through Cloudflare Access.
+
+The Cron Trigger in `wrangler.toml` schedules quote sync during the Nepal market-day window. Historical OHLCV and indicator checks are scheduled once per Nepal day after market close. Cron is polling, not a guaranteed instant alert delivery channel.
+
+## 5. Current technical alerts and limitations
+The initial engine calculates RSI(14), SMA(20), SMA(50), and MACD line from daily closes. It creates informational watch/caution alerts, deduplicated for 24 hours. It does not place trades and does not yet include volume confirmation, support/resistance, WACC-based portfolio risk, push/email notifications, or user acknowledgement workflows. Validate calculations and provider response fields against real data before making investment decisions.
+
+## Security and production caveats
+- Do not use real portfolio data until Cloudflare Access is enabled and tested.
+- The frontend retains a local browser backup for offline continuity; cloud holdings are loaded from D1 when API access is available.
+- No Cloudflare database, Worker deployment, provider licence or API secret has been created by this repository commit.
+- ShareHub provider API integration is unverified until tested with a valid licensed account.
