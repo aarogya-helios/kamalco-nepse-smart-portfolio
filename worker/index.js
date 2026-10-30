@@ -14,7 +14,8 @@ async function verifyAccessJwt(request,env){
   if(!valid)throw new Error("Cloudflare Access token signature is invalid.");
   return payload;
 }
-\nconst json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
+
+const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
 const cors=(request,env)=>({ "access-control-allow-origin": env.APP_ORIGIN || new URL(request.url).origin, "access-control-allow-methods":"GET,POST,PUT,OPTIONS", "access-control-allow-headers":"content-type,authorization", "vary":"Origin" });
 function withCors(response,headers){const h=new Headers(response.headers);for(const [k,v] of Object.entries(headers))h.set(k,v);return new Response(response.body,{status:response.status,headers:h})}
 async function providerToken(env){
@@ -95,7 +96,8 @@ async function syncMarket(env){
   if(historyDue) await env.DB.prepare("INSERT OR REPLACE INTO app_settings(key,value) VALUES('history_sync_date',?)").bind(npDate).run();
   return {synced,alerts:alertCount};
 }
-async function api(request,env){\n  await verifyAccessJwt(request,env);
+async function api(request,env){
+  await verifyAccessJwt(request,env);
   const url=new URL(request.url),path=url.pathname;
   if(path==="/api/health")return json({ok:true,providerConfigured:!!(env.SHAREHUB_EMAIL&&env.SHAREHUB_PASSWORD),database:"D1"});
   if(path==="/api/holdings"&&request.method==="GET"){
