@@ -22,3 +22,5 @@ Follow [CLOUDFLARE_SETUP.md](./CLOUDFLARE_SETUP.md). The app is not ready for pu
 
 ## Data and investment disclaimer
 Technical flags are informational only. Initial indicators are RSI(14), SMA(20), SMA(50) and MACD line; no automatic trades are placed. Provider data, calculations and alert quality must be validated before investment decisions.
+
+<!-- Cloudflare deployment sync: latest main includes the corrected weekday cron schedule in wrangler.toml. -->
