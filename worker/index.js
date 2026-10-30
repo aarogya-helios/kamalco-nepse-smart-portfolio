@@ -98,7 +98,11 @@ export default {
  async fetch(request,env){
   const headers=cors(request,env);
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers});
-  try{return withCors(await api(request,env),headers)}catch(e){console.error(e);return withCors(json({error:e.message||"Internal error"},e.message?.includes("not configured")?503:500),headers)}
+  try{
+   if(new URL(request.url).pathname.startsWith("/api/")) return withCors(await api(request,env),headers);
+   if(env.ASSETS) return env.ASSETS.fetch(request);
+   return withCors(json({error:"Static asset binding missing"},500),headers);
+  }catch(e){console.error(e);return withCors(json({error:e.message||"Internal error"},e.message?.includes("not configured")?503:500),headers)}
  },
  async scheduled(controller,env,ctx){ctx.waitUntil(syncMarket(env).catch(e=>console.error("Scheduled NEPSE sync failed:",e.message)))}
 };
