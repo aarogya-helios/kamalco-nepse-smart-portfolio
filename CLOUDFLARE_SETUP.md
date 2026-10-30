@@ -27,3 +27,9 @@ The first pass calculates RSI(14), SMA(20), SMA(50) and a MACD line from daily c
 
 ## Important security note
 The current starter UI is a local-first prototype. Do not expose write API routes publicly until authentication and per-user authorization are enabled. Configure Cloudflare Access or add a proper authenticated session layer before using real personal portfolio data.
+
+## Before enabling production access
+- The provider account is not included. Contact ShareHub Nepal for a Data API licence with stock-prices and price-history services. Their documentation says API calls require an allow-listed server IP. Cloudflare Workers do not provide a normal fixed outbound IP on the standard Free/Paid plans; confirm an approved egress/allow-list solution with ShareHub before expecting live sync to work.
+- Do not paste API passwords or tokens into GitHub or ChatGPT. Add them only as Cloudflare Worker secrets.
+- Protect the whole application hostname with Cloudflare Access before putting real portfolio holdings in D1. The prototype API does not yet implement per-user authentication/authorization; do not expose it publicly with personal data.
+- The Cron Trigger is a scheduled polling mechanism, not a guaranteed real-time alert channel. Provider rate limits and market hours apply.
