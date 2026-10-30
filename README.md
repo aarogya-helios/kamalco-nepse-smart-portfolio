@@ -1,30 +1,24 @@
 # Kamalco NEPSE Smart Portfolio
 
-A lightweight static portfolio dashboard. Plain HTML, CSS and JavaScript; no npm install or build step is required.
+A static portfolio dashboard with a Cloudflare Worker/D1 backend scaffold.
 
-## Current features
-- Add, edit and delete holdings
-- Calculate investment, current value and unrealized gain/loss from quantity, WACC and manually entered LTP
-- Search holdings
-- Import/export holdings as CSV
-- Save data in this browser using localStorage
+## Dashboard
+- Add, edit and delete share holdings
+- Portfolio investment and gain/loss calculations
+- CSV import/export and local browser backup
+- Cloud API integration for holdings, saved quotes and technical alerts
 
-## Deploy to Cloudflare Pages
-1. Open Workers & Pages and choose Create application.
-2. Choose Pages and Connect to Git.
-3. Select aarogya-helios/kamalco-nepse-smart-portfolio.
-4. Framework preset: None.
-5. Build command: leave blank.
-6. Build output directory: / (repository root).
-7. Deploy.
+## Cloud integration status
+The repository includes:
+- `worker/index.js`: API, ShareHub adapter, scheduled quote/history sync, and basic technical alert engine
+- `migrations/0001_portfolio.sql`: D1 tables for holdings, quotes, price history, alerts and settings
+- `wrangler.toml`: Worker/static assets, D1 binding and Cron Trigger placeholders
+- `CLOUDFLARE_SETUP.md`: required Cloudflare configuration and security checklist
 
-No API keys or secrets are required for this starter.
+**These integrations are not live merely because the code is in GitHub.** You must create the Cloudflare D1 database, configure its ID, configure Cloudflare Access and its JWT variables, deploy the Worker, and add licensed ShareHub credentials as Worker secrets. The ShareHub adapter has not yet been verified against a live licensed account.
 
-## Important limitations
-- No verified NEPSE live market-data provider is connected.
-- LTP values are manually entered; no live price or technical signal is claimed.
-- Browser localStorage is not cloud backup or multi-device sync.
-- Cloudflare D1, authentication, scheduled alerts and verified OHLCV-based technical indicators are future integration steps.
-- No automatic buy/sell orders are placed.
+## Deploy
+Follow [CLOUDFLARE_SETUP.md](./CLOUDFLARE_SETUP.md). The app is not ready for public use with real portfolio data until Cloudflare Access is enabled and verified.
 
-CSV columns: symbol,quantity,wacc,ltp.
+## Data and investment disclaimer
+Technical flags are informational only. Initial indicators are RSI(14), SMA(20), SMA(50) and MACD line; no automatic trades are placed. Provider data, calculations and alert quality must be validated before investment decisions.
