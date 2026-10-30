@@ -1,4 +1,20 @@
-const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
+
+async function verifyAccessJwt(request,env){
+  const token=request.headers.get("Cf-Access-Jwt-Assertion");
+  if(!token||!env.ACCESS_TEAM_DOMAIN||!env.ACCESS_AUD)throw new Error("Access protection is not configured. Set ACCESS_TEAM_DOMAIN and ACCESS_AUD and protect this hostname with Cloudflare Access.");
+  const parts=token.split(".");if(parts.length!==3)throw new Error("Invalid Cloudflare Access token.");
+  const decode=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
+  const header=JSON.parse(new TextDecoder().decode(decode(parts[0]))),payload=JSON.parse(new TextDecoder().decode(decode(parts[1])));
+  const issuer="https://"+env.ACCESS_TEAM_DOMAIN;
+  if(payload.iss!==issuer||!Array.isArray(payload.aud)||!payload.aud.includes(env.ACCESS_AUD)||!payload.exp||payload.exp*1000<Date.now()||(payload.nbf&&payload.nbf*1000>Date.now()))throw new Error("Cloudflare Access token is not valid for this application.");
+  const certs=await fetch(issuer+"/cdn-cgi/access/certs").then(r=>r.json());
+  const jwk=certs.keys?.find(k=>k.kid===header.kid);if(!jwk)throw new Error("Cloudflare Access signing key not found.");
+  const key=await crypto.subtle.importKey("jwk",jwk,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["verify"]);
+  const valid=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,decode(parts[2]),new TextEncoder().encode(parts[0]+"."+parts[1]));
+  if(!valid)throw new Error("Cloudflare Access token signature is invalid.");
+  return payload;
+}
+\nconst json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
 const cors=(request,env)=>({ "access-control-allow-origin": env.APP_ORIGIN || new URL(request.url).origin, "access-control-allow-methods":"GET,POST,PUT,OPTIONS", "access-control-allow-headers":"content-type,authorization", "vary":"Origin" });
 function withCors(response,headers){const h=new Headers(response.headers);for(const [k,v] of Object.entries(headers))h.set(k,v);return new Response(response.body,{status:response.status,headers:h})}
 async function providerToken(env){
@@ -79,7 +95,7 @@ async function syncMarket(env){
   if(historyDue) await env.DB.prepare("INSERT OR REPLACE INTO app_settings(key,value) VALUES('history_sync_date',?)").bind(npDate).run();
   return {synced,alerts:alertCount};
 }
-async function api(request,env){
+async function api(request,env){\n  await verifyAccessJwt(request,env);
   const url=new URL(request.url),path=url.pathname;
   if(path==="/api/health")return json({ok:true,providerConfigured:!!(env.SHAREHUB_EMAIL&&env.SHAREHUB_PASSWORD),database:"D1"});
   if(path==="/api/holdings"&&request.method==="GET"){
