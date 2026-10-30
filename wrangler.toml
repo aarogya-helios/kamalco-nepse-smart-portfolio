@@ -10,7 +10,7 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "kamalco-nepse"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "ed6f4346-2e2e-490d-82b2-c29a31e255c8"
 migrations_dir = "migrations"
 
 [triggers]
