@@ -1,0 +1,20 @@
+name = "kamalco-nepse-smart-portfolio"
+main = "worker/index.js"
+compatibility_date = "2026-10-30"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kamalco-nepse"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["*/5 4-10 * * 0-4"]
+
+[vars]
+APP_ORIGIN = "https://REPLACE_WITH_YOUR_CLOUDFLARE_DOMAIN"
