@@ -1,20 +1,18 @@
 
-async function verifyAccessJwt(request,env){
-  const token=request.headers.get("Cf-Access-Jwt-Assertion");
-  if(!token||!env.ACCESS_TEAM_DOMAIN||!env.ACCESS_AUD)throw new Error("Access protection is not configured. Set ACCESS_TEAM_DOMAIN and ACCESS_AUD and protect this hostname with Cloudflare Access.");
-  const parts=token.split(".");if(parts.length!==3)throw new Error("Invalid Cloudflare Access token.");
-  const decode=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
-  const header=JSON.parse(new TextDecoder().decode(decode(parts[0]))),payload=JSON.parse(new TextDecoder().decode(decode(parts[1])));
-  const issuer="https://"+env.ACCESS_TEAM_DOMAIN;
-  if(payload.iss!==issuer||!Array.isArray(payload.aud)||!payload.aud.includes(env.ACCESS_AUD)||!payload.exp||payload.exp*1000<Date.now()||(payload.nbf&&payload.nbf*1000>Date.now()))throw new Error("Cloudflare Access token is not valid for this application.");
-  const certs=await fetch(issuer+"/cdn-cgi/access/certs").then(r=>r.json());
-  const jwk=certs.keys?.find(k=>k.kid===header.kid);if(!jwk)throw new Error("Cloudflare Access signing key not found.");
-  const key=await crypto.subtle.importKey("jwk",jwk,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["verify"]);
-  const valid=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,decode(parts[2]),new TextEncoder().encode(parts[0]+"."+parts[1]));
-  if(!valid)throw new Error("Cloudflare Access token signature is invalid.");
-  return payload;
+const COOKIE="kamalco_session",SESSION_SECONDS=43200,enc=new TextEncoder();
+const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_");
+const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((s.length+3)%4)),c=>c.charCodeAt(0));
+async function hkey(secret){return crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"])}
+async function sessionToken(env){const p=b64u(enc.encode(JSON.stringify({sub:"owner",exp:Math.floor(Date.now()/1000)+SESSION_SECONDS})));const sig=b64u(await crypto.subtle.sign("HMAC",await hkey(env.SESSION_SECRET),enc.encode(p)));return p+"."+sig}
+async function validSession(req,env){const c=req.headers.get("Cookie")||"",t=c.split(";").map(x=>x.trim()).find(x=>x.startsWith(COOKIE+"="))?.slice(COOKIE.length+1);if(!t||!env.SESSION_SECRET)return false;try{const [p,s,...rest]=t.split(".");if(!p||!s||rest.length)return false;if(!await crypto.subtle.verify("HMAC",await hkey(env.SESSION_SECRET),unb64u(s),enc.encode(p)))return false;const d=JSON.parse(new TextDecoder().decode(unb64u(p)));return d.sub==="owner"&&d.exp>Math.floor(Date.now()/1000)}catch{return false}}
+function cookie(v,age=SESSION_SECONDS){return COOKIE+"="+v+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+age}
+async function authApi(req,env){const path=new URL(req.url).pathname,origin=new URL(req.url).origin;
+ if(path==="/api/login"&&req.method==="POST"){if(req.headers.get("Origin")!==origin)return json({error:"Invalid request origin."},403);if(!env.APP_PASSWORD||!env.SESSION_SECRET)return json({error:"Login secrets are not configured."},503);let b;try{b=await req.json()}catch{return json({error:"Invalid request."},400)}const supplied=String(b.password||""),[a,z]=await Promise.all([crypto.subtle.digest("SHA-256",enc.encode(supplied)),crypto.subtle.digest("SHA-256",enc.encode(env.APP_PASSWORD))]);let diff=0;const aa=new Uint8Array(a),zz=new Uint8Array(z);for(let i=0;i<aa.length;i++)diff|=aa[i]^zz[i];if(diff!==0)return json({error:"Incorrect password."},401);return new Response(JSON.stringify({ok:true}),{headers:{"content-type":"application/json","cache-control":"no-store","set-cookie":cookie(await sessionToken(env))}})}
+ if(path==="/api/session"&&req.method==="GET")return json({authenticated:await validSession(req,env)});
+ if(path==="/api/logout"&&req.method==="POST"){if(req.headers.get("Origin")!==origin)return json({error:"Invalid request origin."},403);return new Response(JSON.stringify({ok:true}),{headers:{"content-type":"application/json","cache-control":"no-store","set-cookie":cookie("",0)}})}
+ if(!await validSession(req,env))return json({error:"Please log in to access your portfolio."},401);
+ return api(req,env);
 }
-
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
 const cors=(request,env)=>({ "access-control-allow-origin": env.APP_ORIGIN || new URL(request.url).origin, "access-control-allow-methods":"GET,POST,PUT,OPTIONS", "access-control-allow-headers":"content-type,authorization", "vary":"Origin" });
 function withCors(response,headers){const h=new Headers(response.headers);for(const [k,v] of Object.entries(headers))h.set(k,v);return new Response(response.body,{status:response.status,headers:h})}
@@ -97,7 +95,6 @@ async function syncMarket(env){
   return {synced,alerts:alertCount};
 }
 async function api(request,env){
-  await verifyAccessJwt(request,env);
   const url=new URL(request.url),path=url.pathname;
   if(path==="/api/health")return json({ok:true,providerConfigured:!!(env.SHAREHUB_EMAIL&&env.SHAREHUB_PASSWORD),database:"D1"});
   if(path==="/api/holdings"&&request.method==="GET"){
@@ -122,7 +119,7 @@ export default {
   const headers=cors(request,env);
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers});
   try{
-   if(new URL(request.url).pathname.startsWith("/api/")) return withCors(await api(request,env),headers);
+   if(new URL(request.url).pathname.startsWith("/api/")) return withCors(await authApi(request,env),headers);
    if(env.ASSETS) return env.ASSETS.fetch(request);
    return withCors(json({error:"Static asset binding missing"},500),headers);
   }catch(e){console.error(e);return withCors(json({error:e.message||"Internal error"},e.message?.includes("not configured")?503:500),headers)}
