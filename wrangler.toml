@@ -15,8 +15,3 @@ migrations_dir = "migrations"
 
 [triggers]
 crons = ["*/5 4-10 * * 0-4"]
-
-[vars]
-APP_ORIGIN = "https://REPLACE_WITH_YOUR_CLOUDFLARE_DOMAIN"
-ACCESS_TEAM_DOMAIN = "REPLACE_WITH_YOUR_TEAM.cloudflareaccess.com"
-ACCESS_AUD = "REPLACE_WITH_ACCESS_APPLICATION_AUD"
