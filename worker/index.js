@@ -55,11 +55,15 @@ async function syncMarket(env){
   const [quotes,now]=await Promise.all([providerGet(env,"/stock-prices"),Promise.resolve(new Date().toISOString())]);
   const quoteMap=new Map((Array.isArray(quotes)?quotes:[]).map(q=>[q.symbol,q]));
   let synced=0,alertCount=0;
+  const npNow=new Date(Date.now()+345*60*1000);
+  const npDate=npNow.toISOString().slice(0,10);
+  const historyMarker=await env.DB.prepare("SELECT value FROM app_settings WHERE key='history_sync_date'").first();
+  const historyDue=(npNow.getUTCHours()*60+npNow.getUTCMinutes()>=915) && historyMarker?.value!==npDate;
   for(const symbol of symbols){
     const q=quoteMap.get(symbol);if(q&&Number.isFinite(Number(q.ltp))){
       await env.DB.prepare("INSERT OR REPLACE INTO market_quotes(symbol,ltp,change_percent,as_of,source) VALUES(?,?,?,?,?)").bind(symbol,Number(q.ltp),Number(q.changePercent||0),q.lastUpdatedTime||now,"ShareHub").run();synced++;
     }
-    try{
+    if(historyDue) try{
       const history=await providerGet(env,"/price-history/"+encodeURIComponent(symbol)+"?time=1Y");
       const candles=Array.isArray(history)?history:[];
       const batch=[];
@@ -72,6 +76,7 @@ async function syncMarket(env){
       }
     }catch(e){console.error("History sync failed for",symbol,e.message)}
   }
+  if(historyDue) await env.DB.prepare("INSERT OR REPLACE INTO app_settings(key,value) VALUES('history_sync_date',?)").bind(npDate).run();
   return {synced,alerts:alertCount};
 }
 async function api(request,env){
