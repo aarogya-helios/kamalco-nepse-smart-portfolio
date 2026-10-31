@@ -1,9 +1,10 @@
 const DEFAULT_HOLDINGS=[
 ["ADBL",1000,310,347],["NIMB",1300,207,212],["ICFC",700,629,627],["PRVU",1000,195,194],["NABIL",100,576,549],["HBL",6000,225,208],["AKPL",1000,284,262],["SRLI",1000,421,389],["KBSH",300,970,892],["HIDCL",1015,286,257],["GCIL",2300,456,400],["RIDI",418,392,342],["UNHPL",1000,422,366],["NMFBS",226,1388,1191],["SKBBL",172,949,768],["AHPC",1575,336,264],["CHCL",540,515,347],["JOSHI",1700,320,263],["CITY",1000,372,327],["NICA",1445,420,331],["MERO",801,803,625],["UPPER",7500,260,195],["LLBS",100,1179,815],["RLFL",1000,644,430],["NMLBBL",151,764,496],["BFC",500,709,459],["CORBL",400,1310,782],["RHPL",2500,301,173],["HATHY",100,764,415],["SINDU",2500,813,412],["TSHL",300,789,342]
-].map(([symbol,quantity,wacc,ltp])=>({symbol,quantity,wacc,ltp}));
+].map(([symbol,quantity,wacc])=>({symbol,quantity,wacc,ltp:null}));
 const RED_GROUP=new Set(["JOSHI","CITY","NICA","MERO","UPPER","LLBS","RLFL","NMLBBL","BFC","CORBL","RHPL","HATHY","SINDU","TSHL"]);
 const NEAR_BREAK_EVEN_PCT=2;
-\nconst KEY="kamalco-nepse-holdings-v1";let holdings=load();let cloudOnline=false;let cloudQuotes=new Map();
+
+const KEY="kamalco-nepse-holdings-v1";let holdings=load();let cloudOnline=false;let cloudQuotes=new Map();
 const $=id=>document.getElementById(id);
 function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch{return []}}
 function money(n){return "Rs. "+Number(n||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}
