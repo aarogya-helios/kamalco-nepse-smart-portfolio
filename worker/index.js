@@ -124,5 +124,12 @@ export default {
    return withCors(json({error:"Static asset binding missing"},500),headers);
   }catch(e){console.error(e);return withCors(json({error:e.message||"Internal error"},e.message?.includes("not configured")?503:500),headers)}
  },
- async scheduled(controller,env,ctx){ctx.waitUntil(syncMarket(env).catch(e=>console.error("Scheduled NEPSE sync failed:",e.message)))}
+ async scheduled(controller,env,ctx){
+  // Cloudflare cron is UTC. Run automatic quotes only on Nepal trading days
+  // during the NEPSE session, with one final pass at 15:15 for daily history.
+  const npNow=new Date(Date.now()+345*60*1000);
+  const day=npNow.getUTCDay(),minute=npNow.getUTCHours()*60+npNow.getUTCMinutes();
+  if(day===0||day===6||minute<660||minute>915)return;
+  ctx.waitUntil(syncMarket(env).catch(e=>console.error("Scheduled NEPSE sync failed:",e.message)));
+ }
 };
