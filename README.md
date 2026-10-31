@@ -1,4 +1,4 @@
-# Kamalco NEPSE Smart Portfolio
+# AarogyaSoftware
 
 A static portfolio dashboard with a Cloudflare Worker/D1 backend scaffold.
 
