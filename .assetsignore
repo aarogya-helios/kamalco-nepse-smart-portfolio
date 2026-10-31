@@ -1,0 +1,7 @@
+.git/
+.wrangler/
+worker/
+migrations/
+*.md
+*.toml
+*.map
