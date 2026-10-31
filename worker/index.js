@@ -75,7 +75,7 @@ async function publicMarketQuotes(){
   const dates=valid.map(q=>Date.parse(q.last_updated||"")).filter(Number.isFinite);
   if(!dates.length)throw new Error("Public NEPSE mirror has no usable price timestamps.");
   const newest=Math.max(...dates),ageHours=(Date.now()-newest)/3600000;
-  if(ageHours>120)throw new Error("Public NEPSE mirror data is too old ("+Math.floor(ageHours)+" hours). No stale prices were saved.");
+  if(ageHours>24)throw new Error("Public NEPSE mirror data is too old ("+Math.floor(ageHours)+" hours). No stale prices were saved.");
   return valid;
 }
 async function syncMarket(env){
