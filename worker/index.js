@@ -132,6 +132,10 @@ async function api(request,env){
   if(path==="/api/alerts"&&request.method==="GET"){
     const r=await env.DB.prepare("SELECT * FROM alert_events ORDER BY created_at DESC LIMIT 100").all();return json({alerts:r.results});
   }
+  if(path==="/api/history-status"&&request.method==="GET"){
+    const r=await env.DB.prepare("SELECT h.symbol,COUNT(p.candle_time) AS count,MAX(p.candle_time) AS latest FROM holdings h LEFT JOIN price_history p ON p.symbol=h.symbol GROUP BY h.symbol ORDER BY h.symbol").all();
+    return json({history:r.results});
+  }
   if(path==="/api/refresh"&&request.method==="POST"){const result=await syncMarket(env);return json({ok:true,...result})}
   return json({error:"Not found"},404);
 }
