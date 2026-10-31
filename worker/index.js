@@ -64,19 +64,40 @@ function technicalAlerts(symbol,candles){
   if(macd!==null&&macd<0)out.push({type:"MACD_NEGATIVE",severity:"watch",message:"MACD line is below zero; check trend confirmation.",value:macd});
   return out;
 }
+async function publicMarketQuotes(){
+  const url="https://raw.githubusercontent.com/Shubhamnpk/yonepse/main/data/nepse_data.json";
+  const response=await fetch(url,{headers:{"accept":"application/json"}});
+  if(!response.ok)throw new Error("Public NEPSE mirror returned HTTP "+response.status);
+  const rows=await response.json();
+  if(!Array.isArray(rows))throw new Error("Public NEPSE mirror returned an unexpected data format.");
+  const valid=rows.filter(q=>q&&typeof q.symbol==="string"&&Number.isFinite(Number(q.ltp))&&Number(q.ltp)>0);
+  if(!valid.length)throw new Error("Public NEPSE mirror has no valid stock prices.");
+  const dates=valid.map(q=>Date.parse(q.last_updated||"")).filter(Number.isFinite);
+  if(!dates.length)throw new Error("Public NEPSE mirror has no usable price timestamps.");
+  const newest=Math.max(...dates),ageHours=(Date.now()-newest)/3600000;
+  if(ageHours>120)throw new Error("Public NEPSE mirror data is too old ("+Math.floor(ageHours)+" hours). No stale prices were saved.");
+  return valid;
+}
 async function syncMarket(env){
   const held=await env.DB.prepare("SELECT symbol FROM holdings").all();const symbols=held.results.map(x=>x.symbol);
   if(!symbols.length)return {synced:0,alerts:0};
-  const [quotes,now]=await Promise.all([providerGet(env,"/stock-prices"),Promise.resolve(new Date().toISOString())]);
-  const quoteMap=new Map((Array.isArray(quotes)?quotes:[]).map(q=>[q.symbol,q]));
+  let quotes,source="ShareHub";
+  try{quotes=await providerGet(env,"/stock-prices");}
+  catch(shareHubError){
+    console.warn("ShareHub unavailable; trying public NEPSE mirror:",shareHubError.message);
+    quotes=await publicMarketQuotes();
+    source="YONEPSE public mirror";
+  }
+  const now=new Date().toISOString();
+  const quoteMap=new Map((Array.isArray(quotes)?quotes:[]).map(q=>[String(q.symbol||"").trim().toUpperCase(),q]));
   let synced=0,alertCount=0;
   const npNow=new Date(Date.now()+345*60*1000);
   const npDate=npNow.toISOString().slice(0,10);
   const historyMarker=await env.DB.prepare("SELECT value FROM app_settings WHERE key='history_sync_date'").first();
   const historyDue=(npNow.getUTCHours()*60+npNow.getUTCMinutes()>=915) && historyMarker?.value!==npDate;
   for(const symbol of symbols){
-    const q=quoteMap.get(symbol);if(q&&Number.isFinite(Number(q.ltp))){
-      await env.DB.prepare("INSERT OR REPLACE INTO market_quotes(symbol,ltp,change_percent,as_of,source) VALUES(?,?,?,?,?)").bind(symbol,Number(q.ltp),Number(q.changePercent||0),q.lastUpdatedTime||now,"ShareHub").run();synced++;
+    const q=quoteMap.get(String(symbol).trim().toUpperCase());if(q&&Number.isFinite(Number(q.ltp))&&Number(q.ltp)>0){
+      await env.DB.prepare("INSERT OR REPLACE INTO market_quotes(symbol,ltp,change_percent,as_of,source) VALUES(?,?,?,?,?)").bind(symbol,Number(q.ltp),Number(q.changePercent??q.percent_change??0),q.lastUpdatedTime||q.last_updated||now,source).run();synced++;
     }
     if(historyDue) try{
       const history=await providerGet(env,"/price-history/"+encodeURIComponent(symbol)+"?time=1Y");
@@ -92,7 +113,7 @@ async function syncMarket(env){
     }catch(e){console.error("History sync failed for",symbol,e.message)}
   }
   if(historyDue) await env.DB.prepare("INSERT OR REPLACE INTO app_settings(key,value) VALUES('history_sync_date',?)").bind(npDate).run();
-  return {synced,alerts:alertCount};
+  return {synced,alerts:alertCount,source};
 }
 async function api(request,env){
   const url=new URL(request.url),path=url.pathname;
