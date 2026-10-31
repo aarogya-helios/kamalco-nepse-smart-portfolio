@@ -132,6 +132,21 @@ async function api(request,env){
   if(path==="/api/alerts"&&request.method==="GET"){
     const r=await env.DB.prepare("SELECT * FROM alert_events ORDER BY created_at DESC LIMIT 100").all();return json({alerts:r.results});
   }
+  if(path==="/api/analysis"&&request.method==="GET"){
+    const held=await env.DB.prepare("SELECT symbol,wacc FROM holdings ORDER BY symbol").all();
+    const analysis=[];
+    for(const h of held.results){
+      const r=await env.DB.prepare("SELECT candle_time,high,low,close,volume FROM price_history WHERE symbol=? ORDER BY candle_time DESC LIMIT 260").bind(h.symbol).all();
+      const rows=(r.results||[]).reverse(),n=rows.length;
+      const nums=rows.filter(x=>[x.high,x.low,x.close].every(v=>Number.isFinite(Number(v))));
+      const ready=nums.length>=200;
+      const prior=nums.slice(-21,-1),volumes=prior.map(x=>Number(x.volume)).filter(v=>v>0);
+      const avgVol=volumes.length?volumes.reduce((s,v)=>s+v,0)/volumes.length:null;
+      const latest=nums.at(-1);
+      analysis.push({symbol:h.symbol,count:n,ready,support:nums.length>=20?Math.min(...nums.slice(-20).map(x=>Number(x.low))):null,resistance:nums.length>=20?Math.max(...nums.slice(-20).map(x=>Number(x.high))):null,week52Low:ready?Math.min(...nums.slice(-250).map(x=>Number(x.low))):null,week52High:ready?Math.max(...nums.slice(-250).map(x=>Number(x.high))):null,volumeRatio:avgVol&&latest&&Number(latest.volume)>0?Number(latest.volume)/avgVol:null,latestCandle:latest?.candle_time||null});
+    }
+    return json({analysis});
+  }
   if(path==="/api/history-status"&&request.method==="GET"){
     const r=await env.DB.prepare("SELECT h.symbol,COUNT(p.candle_time) AS count,MAX(p.candle_time) AS latest FROM holdings h LEFT JOIN price_history p ON p.symbol=h.symbol GROUP BY h.symbol ORDER BY h.symbol").all();
     return json({history:r.results});
