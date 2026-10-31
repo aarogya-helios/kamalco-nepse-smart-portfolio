@@ -103,7 +103,7 @@ async function api(request,env){
   if(path==="/api/holdings"&&request.method==="PUT"){
     const body=await request.json();if(!Array.isArray(body.holdings))return json({error:"holdings array required"},400);
     const stmts=body.holdings.map(h=>{const symbol=String(h.symbol||"").trim().toUpperCase();const quantity=Number(h.quantity),wacc=Number(h.wacc);if(!/^[A-Z0-9._-]{1,15}$/.test(symbol)||!Number.isFinite(quantity)||quantity<0||!Number.isFinite(wacc)||wacc<0)throw new Error("Invalid holding data");return env.DB.prepare("INSERT INTO holdings(symbol,quantity,wacc) VALUES(?,?,?) ON CONFLICT(symbol) DO UPDATE SET quantity=excluded.quantity,wacc=excluded.wacc,updated_at=CURRENT_TIMESTAMP").bind(symbol,quantity,wacc)});
-    await env.DB.batch(stmts);return json({saved:stmts.length});
+    if(stmts.length){const symbols=body.holdings.map(h=>String(h.symbol||"").trim().toUpperCase());const marks=symbols.map(()=>"?").join(",");await env.DB.batch([...stmts,env.DB.prepare("DELETE FROM holdings WHERE symbol NOT IN ("+marks+")").bind(...symbols)]);}else{await env.DB.prepare("DELETE FROM holdings").run()}return json({saved:stmts.length});
   }
   if(path==="/api/market"&&request.method==="GET"){
     const r=await env.DB.prepare("SELECT * FROM market_quotes ORDER BY symbol").all();return json({quotes:r.results});
